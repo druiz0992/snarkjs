@@ -65,6 +65,15 @@ setup command
 
         Default: original
 
+    --d or --debug <File>
+
+    --fs or --fastsetup <File>
+    
+        Run fast setup mode. If input Filename with precomputed VK values vk_alfa_1 and vk_beta_2 is given, only vk_alfabeta_12 value is computed during setup phase.
+
+        Default : Empty
+
+
 calculate witness command
 =========================
 
@@ -140,6 +149,8 @@ generate a proof command
         This info will be needed to verify the proof.
 
         Default: public.json
+
+    --d or --debug <File>
 
 verify command
 ==============
@@ -246,6 +257,8 @@ print constraints
     .alias("lg", "logget")
     .alias("ls", "logset")
     .alias("lt", "logtrigger")
+    .alias("fs", "fastsetup")
+    .alias("d", "debug")
     .help("h")
     .alias("h", "help")
 
@@ -265,6 +278,8 @@ const proofName = (argv.proof) ? argv.proof : "proof.json";
 const publicName = (argv.public) ? argv.public : "public.json";
 const verifierName = (argv.verifier) ? argv.verifier : "verifier.sol";
 const protocol = (argv.protocol) ? argv.protocol : "original";
+const alfabetaName    = (argv.fastsetup) ? argv.fastsetup : "";
+const debugName    = (argv.debug) ? argv.debug : "";
 
 function p256(n) {
     let nstr = n.toString(16);
@@ -291,11 +306,26 @@ try {
         cir.printConstraints();
 
     } else if (argv._[0].toUpperCase() == "SETUP") {
+        alfabeta_12 = {}
+        toxic = {}
+        if (alfabetaName != "") {
+          alfabeta_12 = JSON.parse(fs.readFileSync(alfabetaName, "utf8"));
+          const alfabeta = zkSnark[protocol].setup({}, toxic, alfabeta_12);
+          fs.writeFileSync(alfabetaName, JSON.stringify(stringifyBigInts(alfabeta), null, 1), "utf-8");
+          process.exit(0);
+        }
+ 
         const cirDef = JSON.parse(fs.readFileSync(circuitName, "utf8"));
         const cir = new zkSnark.Circuit(cirDef);
 
         if (!zkSnark[protocol]) throw new Error("Invalid protocol");
-        const setup = zkSnark[protocol].setup(cir);
+
+        if (debugName != "") {
+           toxic = JSON.parse(fs.readFileSync(debugName, "utf8"));
+        }
+
+
+        const setup = zkSnark[protocol].setup(cir, toxic, alfabeta_12);
 
         fs.writeFileSync(provingKeyName, JSON.stringify(stringifyBigInts(setup.vk_proof), null, 1), "utf-8");
         fs.writeFileSync(verificationKeyName, JSON.stringify(stringifyBigInts(setup.vk_verifier), null, 1), "utf-8");
@@ -317,10 +347,15 @@ try {
     } else if (argv._[0].toUpperCase() == "PROOF") {
         const witness = unstringifyBigInts(JSON.parse(fs.readFileSync(witnessName, "utf8")));
         const provingKey = unstringifyBigInts(JSON.parse(fs.readFileSync(provingKeyName, "utf8")));
+        rand_in = {}
+
+        if (debugName != "") {
+           rand_in = JSON.parse(fs.readFileSync(debugName, "utf8"));
+        }
 
         const protocol = provingKey.protocol;
         if (!zkSnark[protocol]) throw new Error("Invalid protocol");
-        const {proof, publicSignals} = zkSnark[protocol].genProof(provingKey, witness);
+        const {proof, publicSignals} = zkSnark[protocol].genProof(provingKey, witness, rand_in);
 
         fs.writeFileSync(proofName, JSON.stringify(stringifyBigInts(proof), null, 1), "utf-8");
         fs.writeFileSync(publicName, JSON.stringify(stringifyBigInts(publicSignals), null, 1), "utf-8");

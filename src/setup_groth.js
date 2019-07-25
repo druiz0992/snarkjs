@@ -31,7 +31,7 @@ const G2 = bn128.G2;
 const PolF = new PolField(new ZqField(bn128.r));
 const F = new ZqField(bn128.r);
 
-module.exports = function setup(circuit) {
+module.exports = function setup(circuit,toxic, alfabeta_12) {
     const setup = {
         vk_proof : {
             protocol: "groth",
@@ -45,12 +45,38 @@ module.exports = function setup(circuit) {
         toxic: {}
     };
 
+    if (Object.keys(alfabeta_12).length > 0){
+       alfa = new Array(3);
+       beta = new Array(3);
+       for (let i=0; i<3; i++) {
+         alfa[i] = BigInt(alfabeta_12.vk_alfa_1[i]);
+         beta[i] = new Array(2);
+         beta[i][0] = BigInt(alfabeta_12.vk_beta_2[i][0]);
+         beta[i][1] = BigInt(alfabeta_12.vk_beta_2[i][1]);
+       }
 
+       return calculateVkAlfabeta_12(alfa, beta);
+    }
+ 
     setup.vk_proof.domainBits = PolF.log2(circuit.nConstraints + circuit.nPubInputs + circuit.nOutputs +1 -1) +1;
     setup.vk_proof.domainSize = 1 << setup.vk_proof.domainBits;
 
     calculatePolinomials(setup, circuit);
-    setup.toxic.t = F.random();
+
+    if (Object.keys(toxic).length > 0){
+      setup.toxic.t = BigInt(toxic.t);
+      setup.toxic.kalfa = BigInt(toxic.kalfa);
+      setup.toxic.kbeta = BigInt(toxic.kbeta);
+      setup.toxic.kgamma = BigInt(toxic.kgamma);
+      setup.toxic.kdelta = BigInt(toxic.kdelta);
+    } else {
+      setup.toxic.t = F.random();
+      setup.toxic.kalfa = F.random();
+      setup.toxic.kbeta = F.random();
+      setup.toxic.kgamma = F.random();
+      setup.toxic.kdelta = F.random();
+    }
+
     calculateEncriptedValuesAtT(setup, circuit);
 
     return setup;
@@ -110,6 +136,10 @@ function calculateValuesAtT(setup, circuit) {
         for (let c in setup.vk_proof.polsC[s]) {
             c_t[s] = F.add(c_t[s], F.mul(u[c], setup.vk_proof.polsC[s][c]));
         }
+
+        a_t[s] = F.affine(a_t[s])
+        b_t[s] = F.affine(b_t[s])
+        c_t[s] = F.affine(c_t[s])
     }
 
     return {a_t, b_t, c_t, z_t};
@@ -117,7 +147,11 @@ function calculateValuesAtT(setup, circuit) {
 }
 
 
-
+function calculateVkAlfabeta_12(alfa, beta) {
+    const vk_alfabeta_12 = bn128.F12.affine(bn128.pairing( alfa , beta ));
+    
+    return vk_alfabeta_12;
+}
 
 function calculateEncriptedValuesAtT(setup, circuit) {
 
@@ -127,11 +161,6 @@ function calculateEncriptedValuesAtT(setup, circuit) {
     setup.vk_proof.B2 = new Array(circuit.nVars);
     setup.vk_proof.C = new Array(circuit.nVars);
     setup.vk_verifier.IC = new Array(circuit.nPublic);
-
-    setup.toxic.kalfa = F.random();
-    setup.toxic.kbeta = F.random();
-    setup.toxic.kgamma = F.random();
-    setup.toxic.kdelta = F.random();
 
     let invDelta = F.inverse(setup.toxic.kdelta);
     let invGamma = F.inverse(setup.toxic.kgamma);
@@ -150,7 +179,8 @@ function calculateEncriptedValuesAtT(setup, circuit) {
     setup.vk_verifier.vk_gamma_2 = G2.affine(G2.mulScalar( G2.g, setup.toxic.kgamma));
     setup.vk_verifier.vk_delta_2 = G2.affine(G2.mulScalar( G2.g, setup.toxic.kdelta));
 
-    setup.vk_verifier.vk_alfabeta_12 = bn128.F12.affine(bn128.pairing( setup.vk_verifier.vk_alfa_1 , setup.vk_verifier.vk_beta_2 ));
+    setup.vk_verifier.vk_alfabeta_12 = calculateVkAlfabeta_12(setup.vk_verifier.vk_alfa_1 , setup.vk_verifier.vk_beta_2 );
+ 
 
     for (let s=0; s<circuit.nVars; s++) {
 
