@@ -371,10 +371,10 @@ try {
         const isValid = zkSnark[protocol].isValid(verificationKey, proof, public);
 
         if (isValid) {
-            console.log("OK");
+            //console.log("OK");
             process.exit(0);
         } else {
-            console.log("INVALID");
+            //console.log("INVALID");
             process.exit(1);
         }
     } else if (argv._[0].toUpperCase() == "GENERATEVERIFIER") {
